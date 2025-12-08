@@ -5,7 +5,7 @@ services:
   amnezia-wg-easy:
     env_file:
       - .env
-    image: xtrime/amnezia-wg-easy:0.2.15
+    image: xtrime/amnezia-wg-easy:0.2.16
     build:
       x-bake:
         platforms:
