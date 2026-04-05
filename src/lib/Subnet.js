@@ -53,4 +53,23 @@ function networkCidr(wgDefaultAddress) {
   return `${uint32ToIp(network)}/${cidr}`;
 }
 
-module.exports = { parseSubnet, stripCidr, networkCidr };
+/**
+ * Generator that yields available client IP addresses for the given subnet.
+ * Skips: network address, server (+1), broadcast, and any .0/.255 last octets.
+ */
+function* generateIPs(wgDefaultAddress) {
+  const { template, cidr } = parseSubnet(wgDefaultAddress);
+  const baseIp = template.replace('x', '0');
+  const mask = cidr === 0 ? 0 : (0xFFFFFFFF << (32 - cidr)) >>> 0;
+  const network = (ipToUint32(baseIp) & mask) >>> 0;
+  const broadcast = (network | (~mask >>> 0)) >>> 0;
+
+  // Start from network + 2 (skip network address and server at +1)
+  for (let ip = network + 2; ip < broadcast; ip++) {
+    const lastOctet = ip & 0xFF;
+    if (lastOctet === 0 || lastOctet === 255) continue;
+    yield uint32ToIp(ip);
+  }
+}
+
+module.exports = { parseSubnet, stripCidr, networkCidr, generateIPs };
