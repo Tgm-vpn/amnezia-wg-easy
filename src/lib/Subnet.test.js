@@ -3,7 +3,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseSubnet, stripCidr, networkCidr, generateIPs } = require('./Subnet');
+const { parseSubnet, stripCidr, networkCidr, generateIPs, findFreeAddress } = require('./Subnet');
 
 describe('parseSubnet', () => {
   it('defaults to /24 when no CIDR suffix', () => {
@@ -115,5 +115,32 @@ describe('generateIPs', () => {
     const ips = [...generateIPs('10.8.0.x/30')];
     assert.equal(ips.length, 1);
     assert.equal(ips[0], '10.8.0.2');
+  });
+});
+
+describe('findFreeAddress', () => {
+  it('returns first available IP when none are used', () => {
+    assert.equal(findFreeAddress('10.8.0.x', new Set()), '10.8.0.2');
+  });
+
+  it('skips used addresses', () => {
+    const used = new Set(['10.8.0.2', '10.8.0.3']);
+    assert.equal(findFreeAddress('10.8.0.x', used), '10.8.0.4');
+  });
+
+  it('returns null when subnet is full', () => {
+    // /30 has only 1 client IP: 10.8.0.2
+    const used = new Set(['10.8.0.2']);
+    assert.equal(findFreeAddress('10.8.0.x/30', used), null);
+  });
+
+  it('works with /16 subnets', () => {
+    const used = new Set(['10.8.0.2']);
+    assert.equal(findFreeAddress('10.8.0.x/16', used), '10.8.0.3');
+  });
+
+  it('handles addresses with stale CIDR in used set via stripCidr', () => {
+    const used = new Set(['10.8.0.2', '10.8.0.3', '10.8.0.4']);
+    assert.equal(findFreeAddress('10.8.0.x', used), '10.8.0.5');
   });
 });

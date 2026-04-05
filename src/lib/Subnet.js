@@ -72,4 +72,17 @@ function* generateIPs(wgDefaultAddress) {
   }
 }
 
-module.exports = { parseSubnet, stripCidr, networkCidr, generateIPs };
+/**
+ * Find the first free IP address in the subnet.
+ * @param {string} wgDefaultAddress - e.g. "10.8.0.x/16"
+ * @param {Set<string>} usedAddresses - set of occupied IP strings (no CIDR)
+ * @returns {string|null} - free IP or null if subnet is full
+ */
+function findFreeAddress(wgDefaultAddress, usedAddresses) {
+  for (const ip of generateIPs(wgDefaultAddress)) {
+    if (!usedAddresses.has(ip)) return ip;
+  }
+  return null;
+}
+
+module.exports = { parseSubnet, stripCidr, networkCidr, generateIPs, findFreeAddress };
