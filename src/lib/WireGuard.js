@@ -9,6 +9,7 @@ const CRC32 = require('crc-32');
 
 const Util = require('./Util');
 const ServerError = require('./ServerError');
+const { stripCidr, findFreeAddress } = require('./Subnet');
 
 const {
   WG_PATH,
@@ -26,6 +27,7 @@ const {
   WG_POST_DOWN,
   WG_ENABLE_EXPIRES_TIME,
   WG_ENABLE_ONE_TIME_LINKS,
+  WG_SUBNET,
   JC,
   JMIN,
   JMAX,
@@ -56,7 +58,7 @@ module.exports = class WireGuard {
         const publicKey = await Util.exec(`echo ${privateKey} | wg pubkey`, {
           log: 'echo ***hidden*** | wg pubkey',
         });
-        const address = WG_DEFAULT_ADDRESS.replace('x', '1');
+        const address = stripCidr(WG_DEFAULT_ADDRESS.replace('x', '1'));
 
         config = {
           server: {
@@ -121,7 +123,7 @@ module.exports = class WireGuard {
 # Server
 [Interface]
 PrivateKey = ${config.server.privateKey}
-Address = ${config.server.address}/24
+Address = ${config.server.address}/${WG_SUBNET.cidr}
 ListenPort = ${WG_PORT}
 PreUp = ${WG_PRE_UP}
 PostUp = ${WG_POST_UP}
@@ -147,7 +149,7 @@ H4 = ${config.server.h4}
 [Peer]
 PublicKey = ${client.publicKey}
 ${client.preSharedKey ? `PresharedKey = ${client.preSharedKey}\n` : ''
-}AllowedIPs = ${client.address}/32`;
+}AllowedIPs = ${stripCidr(client.address)}/32`;
     }
 
     debug('Config saving...');
@@ -242,7 +244,7 @@ ${client.preSharedKey ? `PresharedKey = ${client.preSharedKey}\n` : ''
     return `
 [Interface]
 PrivateKey = ${client.privateKey ? `${client.privateKey}` : 'REPLACE_ME'}
-Address = ${client.address}/24
+Address = ${client.address}/${WG_SUBNET.cidr}
 ${WG_DEFAULT_DNS ? `DNS = ${WG_DEFAULT_DNS}\n` : ''}\
 ${WG_MTU ? `MTU = ${WG_MTU}\n` : ''}\
 Jc = ${config.server.jc}
@@ -285,17 +287,11 @@ Endpoint = ${WG_HOST}:${WG_CONFIG_PORT}`;
     const preSharedKey = await Util.exec('wg genpsk');
 
     // Calculate next IP
-    let address;
-    for (let i = 2; i < 255; i++) {
-      const client = Object.values(config.clients).find((client) => {
-        return client.address === WG_DEFAULT_ADDRESS.replace('x', i);
-      });
-
-      if (!client) {
-        address = WG_DEFAULT_ADDRESS.replace('x', i);
-        break;
-      }
-    }
+    const usedAddresses = new Set(
+      Object.values(config.clients).map((c) => stripCidr(c.address)),
+    );
+    usedAddresses.add(stripCidr(config.server.address));
+    const address = findFreeAddress(WG_DEFAULT_ADDRESS, usedAddresses);
 
     if (!address) {
       throw new Error('Maximum number of clients reached.');
