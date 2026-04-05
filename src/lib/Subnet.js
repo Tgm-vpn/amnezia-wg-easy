@@ -26,4 +26,31 @@ function stripCidr(str) {
   return slashIdx === -1 ? str : str.slice(0, slashIdx);
 }
 
-module.exports = { parseSubnet, stripCidr };
+function ipToUint32(ip) {
+  const parts = ip.split('.').map(Number);
+  return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+}
+
+function uint32ToIp(num) {
+  return [
+    (num >>> 24) & 0xFF,
+    (num >>> 16) & 0xFF,
+    (num >>> 8) & 0xFF,
+    num & 0xFF,
+  ].join('.');
+}
+
+/**
+ * Compute the network address in CIDR notation using bit arithmetic.
+ * "10.8.5.x/16" -> "10.8.0.0/16"
+ * "10.8.0.x"    -> "10.8.0.0/24"
+ */
+function networkCidr(wgDefaultAddress) {
+  const { template, cidr } = parseSubnet(wgDefaultAddress);
+  const baseIp = template.replace('x', '0');
+  const mask = cidr === 0 ? 0 : (0xFFFFFFFF << (32 - cidr)) >>> 0;
+  const network = (ipToUint32(baseIp) & mask) >>> 0;
+  return `${uint32ToIp(network)}/${cidr}`;
+}
+
+module.exports = { parseSubnet, stripCidr, networkCidr };
